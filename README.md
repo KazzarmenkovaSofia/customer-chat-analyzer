@@ -1,5 +1,6 @@
-# 📊 Theme Statistic & Chat Analyzer
-SQL Workflow Documentation
+# 📊 Theme Statistic & Chat Analyzer  
+SQL Workflow Documentation  
+*(English version below)*
 
 Этот проект содержит SQL-скрипты, которые формируют две аналитические таблицы:
 
@@ -110,8 +111,6 @@ group by chat_thread_rk;
 
 ## 🗂 Итог
 
-После выполнения SQL создаются две таблицы:
-
 ### **theme_statistic**
 - детальная аналитика консультаций  
 - параметры из `consultation_desc`  
@@ -120,4 +119,129 @@ group by chat_thread_rk;
 ### **first_chat_analiser**
 - время начала каждого чата  
 - используется для SLA, waiting time, duration  
+
+---
+
+# 📘 English Version
+
+# 📊 Theme Statistic & Chat Analyzer  
+SQL Workflow Documentation
+
+This project contains SQL scripts responsible for creating two analytical tables:
+
+- **theme_statistic** — detailed consultation analytics  
+- **first_chat_analiser** — identification of the first message in each chat thread  
+
+---
+
+## 🚀 1. Table `theme_statistic`
+
+The table is built based on data from:
+
+- `prod_v_dds.consultation`
+- `prod_v_dds.communication`
+- `prod_v_dds.communication_x_chat_thread`
+- `prod_v_dds.chat_thread`
+
+### SQL workflow:
+
+### 1) Drops the old table
+```sql
+drop table if exists theme_statistic;
+```
+
+### 2) Extracts consultations within the period  
+Filter by subject: `Auto.Travel.Partners`  
+Date range: `2024-10-01` → `2024-11-01`
+
+### 3) Parses the `consultation_desc` field
+
+From a string like:
+```
+"type":"Hotel","brand":"Ibis","provider":"Expedia","order":"12345","process":"payment","topic":"refund",...
+```
+
+SQL extracts:
+
+- type  
+- brand  
+- provider  
+- order  
+- process  
+- topic  
+- subTopic  
+- subTopic2  
+
+Using:
+- `split_part()`
+- `substring()`
+- `trim()`
+
+### 4) Joins communication details
+
+Based on `communication_rk`:
+
+- communication_id  
+- communication_method_cd  
+- communication_direction_cd  
+- chat_thread_id  
+
+### 5) Creates the final table
+```sql
+create table theme_statistic as
+select ...
+```
+
+---
+
+## 💬 2. Table `first_chat_analiser`
+
+Stores the earliest message timestamp for each chat thread.
+
+### Steps:
+
+### 1) Drops old version
+```sql
+drop table if exists first_chat_analiser;
+```
+
+### 2) Finds minimum message datetime
+```sql
+create table first_chat_analiser as
+select chat_thread_rk, min(create_dttm)
+from prod_v_dds.chat_message
+where create_dttm::date between '2024-10-01' and '2024-11-01'
+group by chat_thread_rk;
+```
+
+---
+
+## 📄 Example output `theme_statistic`
+
+| create_dttm | consultation_rk | type | brand | provider | ord | process | topic | subTopic | subTopic2 | communication_id | method | direction | chat_thread_id |
+|-------------|-----------------|------|--------|----------|------|----------|---------|-----------|------------|------------------|--------|-----------|-----------------|
+| 2024-10-05 | 1002345 | Hotel | Ibis | Expedia | 12345 | payment | refund | delay | card | COMM_001 | chat | outbound | THR_0001 |
+| 2024-10-05 | 1002388 | Flight | Aeromexico | Amadeus | 99117 | change | price | fee | policy | COMM_002 | phone | inbound | THR_0002 |
+
+---
+
+## 📄 Example output `first_chat_analiser`
+
+| chat_thread_rk | first_message_dttm |
+|----------------|--------------------|
+| 56701 | 2024-10-05 10:14:55 |
+| 56702 | 2024-10-05 11:03:12 |
+
+---
+
+## 🗂 Summary
+
+### **theme_statistic**
+- detailed consultation analytics  
+- extracted attributes from `consultation_desc`  
+- communication and chat-thread details  
+
+### **first_chat_analiser**
+- first message of each chat thread  
+- used for SLA, waiting time, duration metrics  
 
